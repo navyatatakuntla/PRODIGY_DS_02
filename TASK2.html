@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Stopwatch — Interactive (Fixed)</title>
+  <style>
+    :root{--bg:#0b1220;--card:#071022;--accent:#06b6d4;--accent-2:#7c3aed;--muted:#9fb0c8}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{display:flex;align-items:center;justify-content:center;background:radial-gradient(1200px 600px at 10% 10%, #07142a 0%, #040812 40%), linear-gradient(180deg,#071024 0%,#071828 100%);color:#e6eef6;padding:20px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:22px;border-radius:16px;box-shadow:0 10px 40px rgba(2,6,23,0.7);width:860px;max-width:98%;display:grid;grid-template-columns:1fr 380px;gap:18px}
+    header{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center}
+    h1{margin:0;font-size:18px}
+    .display-wrap{display:flex;flex-direction:column;gap:12px;align-items:center}
+    .display{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;font-size:52px;text-align:center;padding:16px 18px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));min-width:320px}
+    .small{font-size:13px;padding:8px 12px;border-radius:10px}
+    .controls{display:flex;gap:10px;align-items:center}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:10px 14px;border-radius:10px;color:inherit;cursor:pointer;font-weight:700}
+    button.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));border:none;color:#021022;box-shadow:0 6px 18px rgba(6,182,212,0.12);transform:translateY(0);transition:transform .12s ease}
+    button.primary:active{transform:translateY(1px) scale(.997)}
+    button.ghost{background:transparent}
+    .meta{color:var(--muted);font-size:13px;display:flex;gap:12px;align-items:center}
+
+    /* progress ring */
+    .progress-wrap{position:relative;width:140px;height:140px}
+    .ring{position:absolute;inset:0;display:grid;place-items:center}
+    svg{transform:rotate(-90deg)}
+    .ring-value{font-family:ui-monospace; font-size:14px;color:var(--muted)}
+
+    /* right column */
+    .right{background:rgba(255,255,255,0.01);padding:12px;border-radius:12px}
+    .laps{max-height:520px;overflow:auto;padding:8px;border-radius:8px;background:linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.06))}
+    .lap{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px;border-radius:8px;margin-bottom:8px;border:1px solid rgba(255,255,255,0.02)}
+    .lap.best{border-color:rgba(34,197,94,0.18);box-shadow:inset 0 0 24px rgba(34,197,94,0.02)}
+    .lap.worst{border-color:rgba(239,68,68,0.16);box-shadow:inset 0 0 24px rgba(239,68,68,0.02)}
+    .lap .left{display:flex;gap:8px;align-items:center}
+    .lap .label{min-width:120px}
+    .lap input{background:transparent;border:none;color:inherit;font-weight:600}
+    .actions{display:flex;gap:8px}
+
+    /* footer small controls */
+    .footer-controls{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px}
+
+    /* small screens */
+    @media (max-width:920px){
+      .card{grid-template-columns:1fr;}
+      .display{font-size:44px}
+      .progress-wrap{display:none}
+    }
+  </style>
+</head>
+<body>
+  <main class="card" role="main">
+    <header>
+      <h1>Interactive Stopwatch</h1>
+      <div class="meta">
+        <div class="muted">Saved: <span id="savedCount">0</span></div>
+        <div class="muted">Theme: <button id="toggleTheme" class="small ghost">Toggle</button></div>
+      </div>
+    </header>
+
+    <section class="display-wrap">
+      <div style="display:flex;gap:14px;align-items:center">
+        <div class="progress-wrap" aria-hidden="true">
+          <div class="ring">
+            <svg width="140" height="140" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="52" stroke="rgba(255,255,255,0.06)" stroke-width="12" fill="none"></circle>
+              <circle id="progressCircle" cx="60" cy="60" r="52" stroke="url(#g)" stroke-width="12" stroke-linecap="round" fill="none" stroke-dasharray="326.726" stroke-dashoffset="326.726"></circle>
+              <defs>
+                <linearGradient id="g" x1="0%" x2="100%" y1="0%" y2="100%"><stop offset="0" stop-color="#06b6d4"/><stop offset="1" stop-color="#7c3aed"/></linearGradient>
+              </defs>
+            </svg>
+          </div>
+        </div>
+
+        <div>
+          <div id="time" class="display" aria-live="polite">00:00:00.000</div>
+
+          <div class="controls">
+            <button id="startStop" class="primary small">Start</button>
+            <button id="lap" class="small">Lap</button>
+            <button id="undo" class="small">Undo Lap</button>
+            <button id="reset" class="small">Reset</button>
+            <button id="soundToggle" class="small">🔊</button>
+          </div>
+          <div class="footer-controls" style="justify-content:flex-start;margin-top:6px">
+            <button id="download" class="small">Download CSV</button>
+            <button id="copyShare" class="small">Copy CSV</button>
+            <button id="clearStorage" class="small">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="width:100%;display:flex;gap:10px;align-items:center;justify-content:center;margin-top:8px">
+        <div class="meta">Shortcuts: <strong>Space</strong>=Start/Pause, <strong>L</strong>=Lap, <strong>R</strong>=Reset</div>
+      </div>
+    </section>
+
+    <aside class="right">
+      <h2 style="margin:0 0 10px 0;font-size:14px">Laps</h2>
+      <div id="laps" class="laps" aria-live="polite">No laps yet</div>
+    </aside>
+  </main>
+
+  <script>
+    // --- State ---
+    let running = false;
+    let startTS = 0;
+    let elapsedBefore = 0;
+    let rafId = null;
+    let laps = [];
+    const STORAGE_KEY = 'stopwatch-laps-v2';
+    const timeEl = document.getElementById('time');
+    const startStopBtn = document.getElementById('startStop');
+    const lapBtn = document.getElementById('lap');
+    const undoBtn = document.getElementById('undo');
+    const resetBtn = document.getElementById('reset');
+    const lapsEl = document.getElementById('laps');
+    const savedCountEl = document.getElementById('savedCount');
+    const downloadBtn = document.getElementById('download');
+    const copyShareBtn = document.getElementById('copyShare');
+    const clearStorageBtn = document.getElementById('clearStorage');
+    const progressCircle = document.getElementById('progressCircle');
+    const soundToggle = document.getElementById('soundToggle');
+    const toggleTheme = document.getElementById('toggleTheme');
+
+    // sound
+    let soundOn = true;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function beep(freq=880, duration=0.06){
+      if(!soundOn) return;
+      try{
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sine'; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.01);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        o.stop(audioCtx.currentTime + duration + 0.02);
+      }catch(e){/* no sound in some browsers */}
+    }
+
+    // load saved
+    laps = loadSavedLaps(); renderLaps(); updateSavedCount();
+
+    function format(ms){
+      const msPart = ms % 1000;
+      const totalSeconds = Math.floor(ms/1000);
+      const s = totalSeconds % 60;
+      const totalMinutes = Math.floor(totalSeconds/60);
+      const m = totalMinutes % 60;
+      const h = Math.floor(totalMinutes/60);
+      return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(msPart).padStart(3,'0')}`;
+    }
+
+    function tick(now){
+      const elapsed = (now - startTS) + elapsedBefore;
+      timeEl.textContent = format(Math.floor(elapsed));
+      updateProgress(elapsed);
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function updateProgress(elapsed){
+      // progress shows fraction of 1 minute (wraps every minute)
+      const msInCircle = 60000;
+      const fraction = (elapsed % msInCircle) / msInCircle;
+      const circumference = 2 * Math.PI * 52; // r=52
+      const offset = circumference * (1 - fraction);
+      progressCircle.style.strokeDashoffset = offset;
+    }
+
+    function start(){
+      if(running) return;
+      // resume audio context on user gesture if suspended
+      if(audioCtx.state === 'suspended') audioCtx.resume();
+      startTS = performance.now();
+      rafId = requestAnimationFrame(tick);
+      running = true;
+      startStopBtn.textContent = 'Running'; startStopBtn.classList.add('primary'); startStopBtn.disabled = true;
+      beep(880,0.04);
+    }
+
+    function pause(){
+      if(!running) return;
+      cancelAnimationFrame(rafId);
+      const now = performance.now();
+      elapsedBefore += (now - startTS);
+      running = false;
+      startStopBtn.textContent = 'Start'; startStopBtn.disabled = false; startStopBtn.classList.remove('primary');
+      beep(440,0.04);
+    }
+
+    function reset(){
+      cancelAnimationFrame(rafId);
+      running = false; startTS = 0; elapsedBefore = 0; timeEl.textContent = '00:00:00.000'; progressCircle.style.strokeDashoffset = 2*Math.PI*52;
+      startStopBtn.textContent = 'Start'; startStopBtn.disabled = false; startStopBtn.classList.remove('primary');
+    }
+
+    function getElapsed(){ return running ? (performance.now() - startTS) + elapsedBefore : elapsedBefore; }
+
+    function addLap(){
+      const elapsed = Math.floor(getElapsed());
+      const prev = laps.length ? laps[laps.length-1].ms : 0;
+      const diff = elapsed - prev;
+      const lap = {ms: elapsed, label: format(elapsed), diff};
+      laps.push(lap); saveLaps(); renderLaps(); updateSavedCount();
+      // vibrate on lap if available
+      if(navigator.vibrate) navigator.vibrate(30);
+      beep(1200,0.04);
+      // announce for screen readers
+      announce('Lap ' + laps.length + ' ' + lap.label);
+    }
+
+    function undoLap(){
+      if(!laps.length) return;
+      laps.pop(); saveLaps(); renderLaps(); updateSavedCount(); beep(300,0.04);
+    }
+
+    function renderLaps(){
+      lapsEl.innerHTML = '';
+      if(!laps.length){ lapsEl.innerHTML = '<div class="muted">No laps yet</div>'; return; }
+      // compute best (min diff) and worst (max diff) except first lap
+      const diffs = laps.map(l=>l.diff).slice(1);
+      const best = diffs.length ? Math.min(...diffs) : null;
+      const worst = diffs.length ? Math.max(...diffs) : null;
+      for(let i=0;i<laps.length;i++){
+        const item = laps[i];
+        const el = document.createElement('div'); el.className = 'lap';
+        // mark best/worst
+        if(i>0){ if(item.diff===best) el.classList.add('best'); if(item.diff===worst) el.classList.add('worst'); }
+        el.innerHTML = `
+          <div class="left">
+            <div class="idx">#${i+1}</div>
+            <div class="label"><input value="${escapeHtml(item.label)}" data-idx="${i}" /></div>
+          </div>
+          <div class="actions">
+            <div class="muted">+${format(item.diff)}</div>
+            <button class="small" data-action="delete" data-idx="${i}">Delete</button>
+          </div>`;
+        lapsEl.appendChild(el);
+      }
+      // bind inputs and delete buttons
+      lapsEl.querySelectorAll('input').forEach(inp=>{
+        inp.addEventListener('change',(e)=>{ const i = +e.target.dataset.idx; laps[i].label = e.target.value; saveLaps(); renderLaps(); });
+      });
+      lapsEl.querySelectorAll('button[data-action="delete"]').forEach(b=>{
+        b.addEventListener('click',(e)=>{ const i = +e.target.dataset.idx; laps.splice(i,1); saveLaps(); renderLaps(); updateSavedCount(); });
+      });
+      lapsEl.scrollTop = lapsEl.scrollHeight;
+    }
+
+    function saveLaps(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(laps)); }catch(e){console.warn(e);} }
+    function loadSavedLaps(){ try{ const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; }catch(e){return [];} }
+    function updateSavedCount(){ savedCountEl.textContent = laps.length; }
+
+    function downloadCSV(){
+      if(!laps.length){ alert('No laps to download'); return; }
+      const header = 'index,elapsed_ms,label,diff_ms\n';
+      const rows = laps.map((l,i)=> `${i+1},${l.ms},"${l.label}",${l.diff}`).join('\n');
+      const blob = new Blob([header+rows],{type:'text/csv'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='stopwatch_laps.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    async function copyCSV(){
+      if(!laps.length){ alert('No laps to copy'); return; }
+      const header = 'index,elapsed_ms,label,diff_ms\n';
+      const rows = laps.map((l,i)=> `${i+1},${l.ms},${l.label},${l.diff}`).join('\n');
+      try{ await navigator.clipboard.writeText(header+rows); alert('CSV copied to clipboard'); }catch(e){ alert('Copy failed — your browser may block clipboard access'); }
+    }
+
+    function clearSaved(){ if(!confirm('Clear all saved laps?')) return; laps = []; saveLaps(); renderLaps(); updateSavedCount(); }
+
+    // utilities
+    function escapeHtml(s){
+      // Compatible escaping for older engines (avoid replaceAll)
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    // events
+    startStopBtn.addEventListener('click', start);
+    startStopBtn.addEventListener('dblclick', pause); // dblclick to pause quickly
+    undoBtn.addEventListener('click', undoLap);
+    lapBtn.addEventListener('click', addLap);
+    resetBtn.addEventListener('click', ()=>{ reset(); });
+    downloadBtn.addEventListener('click', downloadCSV);
+    copyShareBtn.addEventListener('click', copyCSV);
+    clearStorageBtn.addEventListener('click', clearSaved);
+    soundToggle.addEventListener('click', ()=>{ soundOn = !soundOn; soundToggle.textContent = soundOn ? '🔊' : '🔈'; });
+
+    // keyboard
+    window.addEventListener('keydown',(e)=>{
+      if(e.code==='Space'){ e.preventDefault(); running? pause():start(); }
+      else if(e.key.toLowerCase()==='l'){ addLap(); }
+      else if(e.key.toLowerCase()==='r'){ reset(); }
+    });
+
+    // long-press on mobile for start/pause toggle
+    let touchStart = 0;
+    window.addEventListener('touchstart',(e)=>{ touchStart = Date.now(); });
+    window.addEventListener('touchend',(e)=>{ if(Date.now()-touchStart < 300){ running? pause():start(); } });
+
+    toggleTheme.addEventListener('click', ()=>{
+      document.body.classList.toggle('alt');
+      // simple theme switch — could swap CSS variables
+      if(document.body.classList.contains('alt')){
+        document.body.style.background = 'linear-gradient(180deg,#fff 0%,#e6f7ff 100%)'; document.body.style.color = '#022';
+      } else { document.body.style.background = 'radial-gradient(1200px 600px at 10% 10%, #07142a 0%, #040812 40%), linear-gradient(180deg,#071024 0%,#071828 100%)'; document.body.style.color = '#e6eef6'; }
+    });
+
+    // initial stroke dasharray
+    (function init(){ const circumference = 2*Math.PI*52; progressCircle.style.strokeDasharray = circumference; progressCircle.style.strokeDashoffset = circumference; })();
+
+    // accessibility: announce time on lap via polite alert (screen readers will pick up)
+    function announce(message){ const live = document.createElement('div'); live.setAttribute('aria-live','polite'); live.style.position='absolute'; live.style.left='-9999px'; live.textContent = message; document.body.appendChild(live); setTimeout(()=>live.remove(),800);
+    }
+
+    // ensure saved state reflected
+    updateSavedCount();
+  </script>
+</body>
+</html>
